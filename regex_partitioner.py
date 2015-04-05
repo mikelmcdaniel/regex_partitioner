@@ -2,9 +2,9 @@
 
 For an NFA, maximum length, target ratio, tolerance ratio, lower bound and
 upper bound, prints a list of  sequences, that are not necessarily accepted
-by the NFA that partitions the space of all sequences lexicographically
-between the lower and upper bounds that an accepts with the maximum length
-or less such the target ratio +- the tolerance ratio of the sequences are
+by the NFA, that partitions the space of all sequences lexicographically
+between the lower and upper bounds that the NFA accepts with a maximum length
+such the target ratio +- the tolerance ratio of the sequences are
 lexicographically less than result.
 """
 import collections
@@ -135,7 +135,6 @@ class NFA(object):
     return frozenset(next_nodes)
 
   def NextNodes(self, cur_nodes, sequence_element):
-    # return self._NextNodesSlow(cur_nodes, sequence_element)
     cur_nodes = frozenset(cur_nodes)
     if (cur_nodes, sequence_element) not in self._m:
       self._m[cur_nodes, sequence_element] = self._NextNodesSlow(
@@ -422,9 +421,6 @@ def FindPartitionSeq(
       mid = (lo + hi) / 2
     mid_str = NumToSeq(mid, nfa.alphabet, max_len)
     mid_num_accepts = nfa.NumAccepts(max_len, mid_str)
-    # print 'X [{}, {})'.format(
-    #   ''.join(NumToSeq(lo, nfa.alphabet, max_len)),
-    #   ''.join(NumToSeq(hi, nfa.alphabet, max_len))), lo, hi
     if (lo >= hi or mid_num_accepts == target
         or abs(lo_num_accepts - hi_num_accepts) <= tolerance):
       break
