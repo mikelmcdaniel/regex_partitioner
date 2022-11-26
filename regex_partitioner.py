@@ -231,15 +231,14 @@ class NFA(object):
         label += 'S'
       if node in self.accept_nodes:
         label += 'A'
-      s.append('  "{}" [label="{}"];'.format(node, label))
+      s.append(f'  "{node}" [label="{label}"];')
     s.append('')
     for from_node, transitions in self.nodes.items():
       for transition, to_nodes in transitions.items():
         if not transition:
           transition = '&epsilon;'
         for to_node in to_nodes:
-          s.append('  "{}" -> "{}" [label="{}"];'.format(
-              from_node, to_node, transition))
+          s.append(f'  "{from_node}" -> "{to_node}" [label="{transition}"];')
     s.append('}')
     return '\n'.join(s)
 
@@ -251,7 +250,7 @@ class RE(object):
     return None
 
   def __repr__(self):
-    return '{}({})'.format(type(self).__name__, str(self))
+    return f'{type(self).__name__}({self})'
 
 
 class RESequence(RE):
@@ -302,7 +301,7 @@ class REConcat(RE):
     return f'{type(self).__name__}({self.sub_trees!r})'
 
   def __str__(self):
-    return '({})'.format(''.join(str(st) for st in self.sub_trees))
+    return f'({"".join(str(st) for st in self.sub_trees)})'
 
   def ToNFA(self):
     if not self.sub_trees:
@@ -345,7 +344,7 @@ class REOr(RE):
     return f'{type(self).__name__}({self.sub_trees!r})'
 
   def __str__(self):
-    return '({})'.format('|'.join(str(st) for st in self.sub_trees))
+    return f'({"|".join(str(st) for st in self.sub_trees)})'
 
   def ToNFA(self):
     assert self.sub_trees
@@ -378,7 +377,7 @@ class RERepeat(RE):
     return f'{type(self).__name__}({self.sub_tree!r})'
 
   def __str__(self):
-    return '({})*'.format(self.sub_tree)
+    return f'({self.sub_tree})*'
 
   def ToNFA(self):
     nfa = self.sub_tree.ToNFA()
@@ -483,7 +482,7 @@ def SreToRE(sre, alphabet=ALPHABET):
         return REOr([
             RESequence(d) for d in alphabet if d not in string.letters])
       else:
-        raise Exception('Unknown category type "{}".'.format(args))
+        raise Exception(f'Unknown category type "{args!r}".')
     elif op == 'assert':  # (?=REGEX)
       _, sres = args
       assert len(sres) == 2
@@ -523,7 +522,7 @@ def SreToRE(sre, alphabet=ALPHABET):
     elif op == 'at':  # Anchor characters (e.g. "^" and "$")
       return RESequence('')
     else:
-      raise Exception('Unknown op, args pair: {}, {}'.format(op, args))
+      raise Exception(f'Unknown op, args pair: {op!r}, {args!r}')
   else:  # concat
     if len(sre) == 1:
       return SreToRE(sre[0])
