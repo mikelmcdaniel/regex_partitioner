@@ -265,6 +265,9 @@ class RESequence(RE):
       return len(self.sequence)
     return None
 
+  def __repr__(self):
+    return f'{type(self).__name__}({self.sequence!r})'
+
   def __str__(self):
     return str(self.sequence)
 
@@ -294,6 +297,9 @@ class REConcat(RE):
       if m is None:
         return None
       sequence = sequence[m:]
+
+  def __repr__(self):
+    return f'{type(self).__name__}({self.sub_trees!r})'
 
   def __str__(self):
     return '({})'.format(''.join(str(st) for st in self.sub_trees))
@@ -335,6 +341,9 @@ class REOr(RE):
         break
     return m
 
+  def __repr__(self):
+    return f'{type(self).__name__}({self.sub_trees!r})'
+
   def __str__(self):
     return '({})'.format('|'.join(str(st) for st in self.sub_trees))
 
@@ -364,6 +373,9 @@ class RERepeat(RE):
       sequence = sequence[m:]
       m = self.sub_tree.Match(sequence)
     return total
+
+  def __repr__(self):
+    return f'{type(self).__name__}({self.sub_tree!r})'
 
   def __str__(self):
     return '({})*'.format(self.sub_tree)
