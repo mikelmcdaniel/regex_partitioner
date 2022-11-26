@@ -18,15 +18,16 @@ import sys
 
 def NumSeqsWithMaxLen(alphabet_size, max_len):
   assert max_len >= 0
-  return (alphabet_size**(max_len + 1) - 1) / (alphabet_size - 1)
+  return (alphabet_size**(max_len + 1) - 1) // (alphabet_size - 1)
 
 
 def NumToSeq(num, alphabet, max_len):
   assert max_len >= 0
+  num = int(num)
   len_seqs_less = max_len - 1
   while num:
     num_seqs_less = NumSeqsWithMaxLen(len(alphabet), len_seqs_less)
-    yield alphabet[(num - 1) / num_seqs_less]
+    yield alphabet[(num - 1) // num_seqs_less]
     num = (num - 1) % num_seqs_less
     len_seqs_less -= 1
 
@@ -58,7 +59,7 @@ def TestSeqNum():
       for s in AllSeqsHelper(alphabet, max_len, []):
         yield ''.join(s)
 
-    for max_len in xrange(7):
+    for max_len in range(7):
       all_sequences = sorted(AllSeqs(alphabet, max_len))
       for expected_num, expected_str in enumerate(all_sequences):
         actual_num = SeqToNum(expected_str, inverse_alphabet, max_len)
@@ -67,8 +68,8 @@ def TestSeqNum():
           assert expected_num == actual_num
           assert expected_str == actual_str
         except AssertionError:
-          print 'Expected {} == {}'.format(expected_num, actual_num)
-          print 'Expected {} == {}'.format(expected_str, actual_str)
+          print(f'Expected {expected_num} == {actual_num}')
+          print(f'Expected {expected_str} == {actual_str}')
           assert False
 
 
@@ -149,7 +150,7 @@ class NFA(object):
 
   def _SumTables(self, table):
     return sum(count
-               for nodes, count in table.iteritems()
+               for nodes, count in table.items()
                if any(node in self.accept_nodes for node in nodes))
 
   def NumAccepts(self, max_len, bound=()):
@@ -172,19 +173,19 @@ class NFA(object):
     eq1[frozenset(self.start_nodes)] = 1
     result = 0
     try:
-      c = bound.next()
+      c = next(bound)
       has_next = True
     except StopIteration:
       has_next = False
-    for _ in xrange(max_len):
+    for _ in range(max_len):
       if not has_next:
         result += self._SumTables(eq1)
       result += self._SumTables(gt1)
-      for nodes, count in gt1.iteritems():
+      for nodes, count in gt1.items():
         for element in self.PossibleTransitions(nodes):
           next_nodes = frozenset(self.NextNodes(nodes, element))
           gt2[next_nodes] += count
-      for nodes, count in eq1.iteritems():
+      for nodes, count in eq1.items():
         for element in self.PossibleTransitions(nodes):
           next_nodes = frozenset(self.NextNodes(nodes, element))
           if not has_next or element > c:
@@ -194,7 +195,7 @@ class NFA(object):
       eq1, eq2 = eq2, collections.defaultdict(int)
       gt1, gt2 = gt2, collections.defaultdict(int)
       try:
-        c = bound.next()
+        c = next(bound)
         has_next = True
       except StopIteration:
         has_next = False
@@ -208,14 +209,14 @@ class NFA(object):
     self.start_nodes = set(n + offset for n in self.start_nodes)
     self.accept_nodes = set(n + offset for n in self.accept_nodes)
     nodes = collections.defaultdict(lambda: collections.defaultdict(set))
-    for node, transitions in self.nodes.iteritems():
+    for node, transitions in self.nodes.items():
       nodes[node + offset] = collections.defaultdict(set)
-      for transition, next_nodes in transitions.iteritems():
+      for transition, next_nodes in transitions.items():
         nodes[node + offset][transition] = set(n + offset for n in next_nodes)
     self.nodes = nodes
 
   def UpdateNodes(self, other_nfa):
-    for k, v in other_nfa.nodes.iteritems():
+    for k, v in other_nfa.nodes.items():
       self.nodes[k] = v
     self.alphabet = sorted(set(self.alphabet + other_nfa.alphabet))
     self.inverse_alphabet = dict((v, k) for k, v in enumerate(self.alphabet))
@@ -232,8 +233,8 @@ class NFA(object):
         label += 'A'
       s.append('  "{}" [label="{}"];'.format(node, label))
     s.append('')
-    for from_node, transitions in self.nodes.iteritems():
-      for transition, to_nodes in transitions.iteritems():
+    for from_node, transitions in self.nodes.items():
+      for transition, to_nodes in transitions.items():
         if not transition:
           transition = '&epsilon;'
         for to_node in to_nodes:
@@ -403,7 +404,7 @@ def FindPartitionSeq(
   max_letter = max(nfa.alphabet)
   lo = SeqToNum(lo, nfa.inverse_alphabet, max_len)
   hi = SeqToNum(
-      (max_letter for _ in xrange(max_len)) if hi is None else hi,
+      (max_letter for _ in range(max_len)) if hi is None else hi,
       nfa.inverse_alphabet, max_len)
   lo_num_accepts = nfa.NumAccepts(max_len, NumToSeq(lo, nfa.alphabet, max_len))
   hi_num_accepts = nfa.NumAccepts(max_len, NumToSeq(hi, nfa.alphabet, max_len))
@@ -418,7 +419,7 @@ def FindPartitionSeq(
       assert mid >= lo
       assert mid <= hi
     else:
-      mid = (lo + hi) / 2
+      mid = (lo + hi) // 2
     mid_str = NumToSeq(mid, nfa.alphabet, max_len)
     mid_num_accepts = nfa.NumAccepts(max_len, mid_str)
     if (lo >= hi or mid_num_accepts == target
@@ -439,7 +440,7 @@ def FindPartitionSeqs(
       FindPartitionSeq(
           nfa, max_len,
           fractions.Fraction(j, num_partitions), lo, hi, tolerance_ratio)
-      for j in xrange(1, num_partitions))
+      for j in range(1, num_partitions))
 
 
 MAX_REPEAT = re.sre_parse.parse('a*')[0][1][1]
@@ -449,6 +450,7 @@ ALPHABET = frozenset(string.printable)
 def SreToRE(sre, alphabet=ALPHABET):
   if isinstance(sre, tuple):
     op, args = sre
+    op = str(op).lower()
     if op == 'branch':  # or
       none, sres = args
       assert none is None  # I don't know how to interpret a non-None value.
@@ -481,13 +483,13 @@ def SreToRE(sre, alphabet=ALPHABET):
       res = []
       main_res = SreToRE(sre)
       if max_repeat >= MAX_REPEAT:
-        for _ in xrange(min_repeat):
+        for _ in range(min_repeat):
           res.append(copy.deepcopy(main_res))
         res.append(RERepeat(copy.deepcopy(main_res)))
       else:
-        for _ in xrange(min_repeat):
+        for _ in range(min_repeat):
           res.append(copy.deepcopy(main_res))
-        for _ in xrange(max_repeat - min_repeat):
+        for _ in range(max_repeat - min_repeat):
           res.append(REOr([copy.deepcopy(main_res), RESequence('')]))
       if len(res) > 1:
         return REConcat(res)
@@ -500,12 +502,12 @@ def SreToRE(sre, alphabet=ALPHABET):
       literal = chr(args)
       return REOr([RESequence(c) for c in alphabet if c != literal])
     elif op == 'subpattern':
-      _, sres = args
+      _, _, _, sres = args
       return SreToRE(sres)
     elif op == 'range':
       min_literal, max_literal = args
       return REOr([RESequence(chr(c))
-                   for c in xrange(min_literal, max_literal + 1)])
+                   for c in range(min_literal, max_literal + 1)])
     elif op == 'at':  # Anchor characters (e.g. "^" and "$")
       return RESequence('')
     else:
@@ -535,9 +537,9 @@ def main(argv):
   t = RegexStrToRE(regex_str)
   nfa = t.ToNFA()
 
-  print '\n'.join(
+  print('\n'.join(
       ''.join(x) for x in FindPartitionSeqs(
-          nfa, max_len, num_partitions, lo, hi, tolerance_ratio))
+          nfa, max_len, num_partitions, lo, hi, tolerance_ratio)))
 
 
 if __name__ == '__main__':
