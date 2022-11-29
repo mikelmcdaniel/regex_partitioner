@@ -50,35 +50,6 @@ def seq_to_num(seq: Iterable[Text], inverse_alphabet: Dict[Text, int], max_len: 
   return num
 
 
-def test_seq_num():
-  for alphabet in ('ab', 'abc', 'abcd', 'abcde', 'abcdef'):
-    inverse_alphabet = dict((v, k) for k, v in enumerate(alphabet))
-    def AllSeqs(alphabet, max_len):
-      def AllSeqsHelper(alphabet, max_len, seq):
-        yield seq
-        if max_len > 0:
-          for _ in AllSeqsHelper(alphabet, max_len - 1, seq):
-            for letter in alphabet:
-              seq.append(letter)
-              yield seq
-              seq.pop()
-      for s in AllSeqsHelper(alphabet, max_len, []):
-        yield ''.join(s)
-
-    for max_len in range(7):
-      all_sequences = sorted(AllSeqs(alphabet, max_len))
-      for expected_num, expected_str in enumerate(all_sequences):
-        actual_num = seq_to_num(expected_str, inverse_alphabet, max_len)
-        actual_str = ''.join(num_to_seq(expected_num, alphabet, max_len))
-        try:
-          assert expected_num == actual_num
-          assert expected_str == actual_str
-        except AssertionError:
-          print(f'Expected {expected_num} == {actual_num}')
-          print(f'Expected {expected_str} == {actual_str}')
-          assert False
-
-
 class NFA(object):
   """Class representing a Nondeterministic Finite Automata."""
 
