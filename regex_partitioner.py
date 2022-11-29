@@ -164,7 +164,7 @@ class NFA(object):
             for nodes, count in eq1.items():
                 for element in self.possible_transitions(nodes):
                     next_nodes = frozenset(self.next_nodes(nodes, element))
-                    if c is None or element is None or element > c:
+                    if c is None or (element is not None and element > c):
                         gt2[next_nodes] += count
                     elif element == c:
                         eq2[next_nodes] += count
