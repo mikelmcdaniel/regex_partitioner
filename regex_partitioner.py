@@ -15,13 +15,19 @@ import re
 import string
 import sys
 
+from typing import Dict, Iterable, Iterator, FrozenSet, List, Optional, Set, Text, Tuple
 
-def num_seqs_with_max_len(alphabet_size, max_len):
+
+def sre_parse(regex_str: Text) -> Tuple:
+  return re.sre_parse.parse(regex_str)  # type: ignore
+
+
+def num_seqs_with_max_len(alphabet_size: int, max_len: int) -> int:
   assert max_len >= 0
   return (alphabet_size**(max_len + 1) - 1) // (alphabet_size - 1)
 
 
-def num_to_seq(num, alphabet, max_len):
+def num_to_seq(num: int, alphabet: List[Text], max_len: int) -> Iterator[Text]:
   assert max_len >= 0
   num = int(num)
   len_seqs_less = max_len - 1
@@ -32,7 +38,7 @@ def num_to_seq(num, alphabet, max_len):
     len_seqs_less -= 1
 
 
-def seq_to_num(seq, inverse_alphabet, max_len):
+def seq_to_num(seq: Iterable[Text], inverse_alphabet: Dict[Text, int], max_len: int) -> int:
   assert max_len >= 0
   len_seq_remaining = max_len - 1
   num = 0
@@ -77,22 +83,21 @@ class NFA(object):
   """Class representing a Nondeterministic Finite Automata."""
 
   def __init__(self):
-    # self.nodes[char or None] -> next_nodes
-    self.nodes = collections.defaultdict(lambda: collections.defaultdict(set))
+    self.nodes: Dict[int, Dict[Optional[Text], Set[int]]] = collections.defaultdict(lambda: collections.defaultdict(set))
     self.start_nodes = set()
     self.accept_nodes = set()
     self.alphabet = []  # ['a', 'b', 'c', ..., 'z']
     self.inverse_alphabet = {}  # {'a': 0, 'b': 1, ..., 'z': 25}
     self._m = {}
 
-  def add_node(self):
+  def add_node(self) -> int:
     new_node_id = len(self.nodes)
     # self.nodes is a default dictionary, so accessing it implicitly
     # creates an entry which can be iterated over.
     self.nodes[new_node_id]  # pylint: disable=pointless-statement
     return new_node_id
 
-  def add_transition(self, from_node, to_node, transition=None):
+  def add_transition(self, from_node: int, to_node: int, transition: Optional[Text]=None) -> None:
     self.nodes[from_node][transition].add(to_node)
     if self._m:
       self._m = {}
@@ -100,14 +105,14 @@ class NFA(object):
       self.inverse_alphabet[transition] = len(self.alphabet)
       self.alphabet.append(transition)
 
-  def possible_transitions(self, nodes):
-    ts = set()
+  def possible_transitions(self, nodes: Iterable[int]) -> Set[Optional[Text]]:
+    ts: Set[Optional[Text]] = set()
     for node in nodes:
       ts.update(self.nodes[node])
     ts.discard(None)
     return ts
 
-  def _next_nodes_slow(self, cur_nodes, sequence_element):
+  def _next_nodes_slow(self, cur_nodes: Iterable[int], sequence_element: Optional[Text]) -> FrozenSet[int]:
     """Returns the next nodes from the current nodes, given a transition.
 
     Args:
@@ -117,7 +122,7 @@ class NFA(object):
     Returns:
       frozen_set: the next nodes
     """
-    next_nodes = set()
+    next_nodes: Set[int] = set()
     for cur_node in cur_nodes:
       next_nodes.update(self.nodes[cur_node].get(sequence_element, ()))
     # Follow epsilon transitions
@@ -135,25 +140,25 @@ class NFA(object):
       last_updates = updates
     return frozenset(next_nodes)
 
-  def next_nodes(self, cur_nodes, sequence_element):
+  def next_nodes(self, cur_nodes: Iterable[int], sequence_element: Optional[Text]) -> FrozenSet[int]:
     cur_nodes = frozenset(cur_nodes)
     if (cur_nodes, sequence_element) not in self._m:
       self._m[cur_nodes, sequence_element] = self._next_nodes_slow(
           cur_nodes, sequence_element)
     return self._m[cur_nodes, sequence_element]
 
-  def accepts(self, sequence):
+  def accepts(self, sequence: Iterable[Text]) -> bool:
     cur_nodes = self.start_nodes
     for item in sequence:
       cur_nodes = self.next_nodes(cur_nodes, item)
     return not self.accept_nodes.isdisjoint(cur_nodes)
 
-  def _sum_tables(self, table):
+  def _sum_tables(self, table: Dict[FrozenSet[int], int]) -> int:
     return sum(count
                for nodes, count in table.items()
                if any(node in self.accept_nodes for node in nodes))
 
-  def num_accepts(self, max_len, bound=()):
+  def num_accepts(self, max_len: int, bound: Iterable[Text] = ()) -> int:
     """Returns the number of sequences accepted by this NFA.
 
     Return the number of sequences with length less than or equal to max_len
@@ -168,17 +173,19 @@ class NFA(object):
     """
 
     bound = iter(bound)
-    eq1, eq2 = collections.defaultdict(int), collections.defaultdict(int)
-    gt1, gt2 = collections.defaultdict(int), collections.defaultdict(int)
+    eq1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+    eq2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+    gt1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+    gt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
     eq1[frozenset(self.start_nodes)] = 1
     result = 0
+    c: Optional[Text] = None
     try:
       c = next(bound)
-      has_next = True
     except StopIteration:
-      has_next = False
+      c = None
     for _ in range(max_len):
-      if not has_next:
+      if c is None:
         result += self._sum_tables(eq1)
       result += self._sum_tables(gt1)
       for nodes, count in gt1.items():
@@ -188,7 +195,7 @@ class NFA(object):
       for nodes, count in eq1.items():
         for element in self.possible_transitions(nodes):
           next_nodes = frozenset(self.next_nodes(nodes, element))
-          if not has_next or element > c:
+          if c is None or element is None or element > c:
             gt2[next_nodes] += count
           elif element == c:
             eq2[next_nodes] += count
@@ -196,32 +203,31 @@ class NFA(object):
       gt1, gt2 = gt2, collections.defaultdict(int)
       try:
         c = next(bound)
-        has_next = True
       except StopIteration:
-        has_next = False
-    if not has_next:
+        c = None
+    if c is None:
       result += self._sum_tables(eq1)
     result += self._sum_tables(gt1)
     return result
 
-  def ensure_disjoint(self, other_nfa):
+  def ensure_disjoint(self, other_nfa: 'NFA') -> None:
     offset = len(other_nfa.nodes)
     self.start_nodes = set(n + offset for n in self.start_nodes)
     self.accept_nodes = set(n + offset for n in self.accept_nodes)
-    nodes = collections.defaultdict(lambda: collections.defaultdict(set))
+    nodes: Dict[int, Dict[Optional[Text], Set[int]]] = collections.defaultdict(lambda: collections.defaultdict(set))
     for node, transitions in self.nodes.items():
       nodes[node + offset] = collections.defaultdict(set)
       for transition, next_nodes in transitions.items():
         nodes[node + offset][transition] = set(n + offset for n in next_nodes)
     self.nodes = nodes
 
-  def update_nodes(self, other_nfa):
+  def update_nodes(self, other_nfa: 'NFA') -> None:
     for k, v in other_nfa.nodes.items():
       self.nodes[k] = v
     self.alphabet = sorted(set(self.alphabet + other_nfa.alphabet))
     self.inverse_alphabet = dict((v, k) for k, v in enumerate(self.alphabet))
 
-  def build_dot_str(self):
+  def build_dot_str(self) -> Text:
     """Returns a string representation of this NFA as a GraphViz *.dot file."""
     s = []
     s.append('digraph {')
@@ -246,31 +252,33 @@ class NFA(object):
 class RE(object):
   """Base Class for representing regular expressions."""
 
-  def match(self, unused_sequence):
+  def match(self, unused_sequence: Text) -> Optional[int]:
     return None
 
-  def __repr__(self):
+  def __repr__(self) -> Text:
     return f'{type(self).__name__}({self})'
 
+  def as_nfa(self) -> NFA:
+    return NFA()
 
 class RESequence(RE):
   """Class representing regular expression of a literal (e.g. "abc")."""
 
-  def __init__(self, sequence):
-    self.sequence = sequence
+  def __init__(self, sequence: Text):
+    self.sequence: Text = sequence
 
-  def match(self, sequence):
+  def match(self, sequence: Text) -> Optional[int]:
     if sequence.startswith(self.sequence):
       return len(self.sequence)
     return None
 
-  def __repr__(self):
+  def __repr__(self) -> Text:
     return f'{type(self).__name__}({self.sequence!r})'
 
-  def __str__(self):
+  def __str__(self) -> Text:
     return str(self.sequence)
 
-  def as_nfa(self):
+  def as_nfa(self) -> NFA:
     """Return the NFA representation of this regular expression."""
     nfa = NFA()
     prev_node = nfa.add_node()
@@ -287,23 +295,30 @@ class RESequence(RE):
 class REConcat(RE):
   """Class representing concatenated regular expressions (e.g. "abc")."""
 
-  def __init__(self, sub_trees):
+  def __init__(self, sub_trees: Iterable[RE]):
     self.sub_trees = list(sub_trees)
 
-  def match(self, sequence):
-    for sub_tree in self.sub_trees:
+  def match(self, sequence: Text) -> Optional[int]:
+    sub_trees = iter(self.sub_trees)
+    first_match: Optional[int] = None
+    try:
+      first_match = next(sub_trees).match(sequence)
+    except StopIteration:
+      return None
+    for sub_tree in sub_trees:
       m = sub_tree.match(sequence)
       if m is None:
         return None
       sequence = sequence[m:]
+    return first_match
 
-  def __repr__(self):
+  def __repr__(self) -> Text:
     return f'{type(self).__name__}({self.sub_trees!r})'
 
-  def __str__(self):
+  def __str__(self) -> Text:
     return f'({"".join(str(st) for st in self.sub_trees)})'
 
-  def as_nfa(self):
+  def as_nfa(self) -> NFA:
     if not self.sub_trees:
       # The concatenation of nothing is equal to the empty sequence.
       nfa = NFA()
@@ -329,10 +344,10 @@ class REConcat(RE):
 class REOr(RE):
   """Class representing a union regular expression (e.g. "a|b")."""
 
-  def __init__(self, sub_trees):
+  def __init__(self, sub_trees: Iterable[RE]):
     self.sub_trees = list(sub_trees)
 
-  def match(self, sequence):
+  def match(self, sequence: Text) -> Optional[int]:
     m = None
     for sub_tree in self.sub_trees:
       m = sub_tree.match(sequence)
@@ -340,13 +355,13 @@ class REOr(RE):
         break
     return m
 
-  def __repr__(self):
+  def __repr__(self) -> Text:
     return f'{type(self).__name__}({self.sub_trees!r})'
 
-  def __str__(self):
+  def __str__(self) -> Text:
     return f'({"|".join(str(st) for st in self.sub_trees)})'
 
-  def as_nfa(self):
+  def as_nfa(self) -> NFA:
     assert self.sub_trees
     nfa = self.sub_trees[0].as_nfa()
     for sub_tree in itertools.islice(self.sub_trees, 1, len(self.sub_trees)):
@@ -361,10 +376,10 @@ class REOr(RE):
 class RERepeat(RE):
   """Class representing a repeating regular expression (e.g. "a*")."""
 
-  def __init__(self, sub_tree):
+  def __init__(self, sub_tree: RE):
     self.sub_tree = sub_tree
 
-  def match(self, sequence):
+  def match(self, sequence: Text) -> Optional[int]:
     total = 0
     m = self.sub_tree.match(sequence)
     while m is not None:
@@ -373,13 +388,13 @@ class RERepeat(RE):
       m = self.sub_tree.match(sequence)
     return total
 
-  def __repr__(self):
+  def __repr__(self) -> Text:
     return f'{type(self).__name__}({self.sub_tree!r})'
 
-  def __str__(self):
+  def __str__(self) -> Text:
     return f'({self.sub_tree})*'
 
-  def as_nfa(self):
+  def as_nfa(self) -> NFA:
     nfa = self.sub_tree.as_nfa()
     connecting_node = nfa.add_node()
     for accept_node in nfa.accept_nodes:
@@ -391,8 +406,8 @@ class RERepeat(RE):
 
 
 def find_partition_seq(
-    nfa, max_len, target_ratio=fractions.Fraction(1, 2),
-    lo=(), hi=None, tolerance_ratio=0):
+    nfa: NFA, max_len: int, target_ratio=fractions.Fraction(1, 2),
+    low: Iterable[Text] = (), high: Optional[Iterable[Text]] = None, tolerance_ratio: float = 0.0) -> Tuple[Text, ...]:
   """Return a sequence that partitions the space of accepted strings.
 
   Returns a sequence, results, that is not necessarily accepted by nfa that
@@ -413,9 +428,9 @@ def find_partition_seq(
   """
 
   max_letter = max(nfa.alphabet)
-  lo = seq_to_num(lo, nfa.inverse_alphabet, max_len)
-  hi = seq_to_num(
-      (max_letter for _ in range(max_len)) if hi is None else hi,
+  lo: int = seq_to_num(low, nfa.inverse_alphabet, max_len)
+  hi: int = seq_to_num(
+      (max_letter for _ in range(max_len)) if high is None else high,
       nfa.inverse_alphabet, max_len)
   lo_num_accepts = nfa.num_accepts(max_len, num_to_seq(lo, nfa.alphabet, max_len))
   hi_num_accepts = nfa.num_accepts(max_len, num_to_seq(hi, nfa.alphabet, max_len))
@@ -425,8 +440,8 @@ def find_partition_seq(
   tolerance = int(total * tolerance_ratio)
   for j in itertools.cycle((0, 1)):
     if j == 0 and hi_num_accepts != lo_num_accepts:
-      mid = (lo + (hi - lo) * (lo_num_accepts - target) /
-             (lo_num_accepts - hi_num_accepts))
+      mid: int = (lo + (hi - lo) * (lo_num_accepts - target) //
+          (lo_num_accepts - hi_num_accepts))
       assert mid >= lo
       assert mid <= hi
     else:
@@ -446,7 +461,8 @@ def find_partition_seq(
 
 
 def find_partition_seqs(
-    nfa, max_len, num_partitions=1, lo=(), hi=None, tolerance_ratio=0):
+    nfa: NFA, max_len: int, num_partitions: int = 1, lo: Iterable[Text] = (), hi: Optional[Iterable[Text]] = None,
+    tolerance_ratio: float = 0.0) -> Iterable[Iterable[Text]]:
   return tuple(
     find_partition_seq(
           nfa, max_len,
@@ -454,33 +470,31 @@ def find_partition_seqs(
     for j in range(1, num_partitions))
 
 
-MAX_REPEAT = re.sre_parse.parse('a*')[0][1][1]
-ALPHABET = frozenset(string.printable)
+MAX_REPEAT = sre_parse('a*')[0][1][1]
+ALPHABET: FrozenSet[Text] = frozenset(string.printable)
 
 
-def sre_to_re(sre, alphabet=ALPHABET):
+def sre_to_re(sre, alphabet: FrozenSet[Text] = ALPHABET) -> RE:
   if isinstance(sre, tuple):
     op, args = sre
     op = str(op).lower()
     if op == 'branch':  # or
       none, sres = args
       assert none is None  # I don't know how to interpret a non-None value.
-      res = map(sre_to_re, sres)
-      return REOr(res)
+      return REOr(map(sre_to_re, sres))
     elif op == 'in':  # or
       sres = args
-      res = map(sre_to_re, sres)
-      return REOr(res)
+      return REOr(map(sre_to_re, sres))
     elif op == 'category':  # or (\d, \W)
       if args == 'category_digit':
         return REOr([RESequence(c) for c in string.digits if c in alphabet])
       elif args == 'category_not_digit':
         return REOr([RESequence(d) for d in alphabet if d not in string.digits])
       elif args == 'category_word':
-        return REOr([RESequence(c) for c in string.letters if c in alphabet])
+        return REOr([RESequence(c) for c in string.ascii_letters if c in alphabet])
       elif args == 'category_not_word':
         return REOr([
-            RESequence(d) for d in alphabet if d not in string.letters])
+            RESequence(d) for d in alphabet if d not in string.ascii_letters])
       else:
         raise Exception(f'Unknown category type "{args!r}".')
     elif op == 'assert':  # (?=REGEX)
@@ -491,7 +505,7 @@ def sre_to_re(sre, alphabet=ALPHABET):
       return REOr([RESequence(c) for c in alphabet])
     elif op == 'max_repeat' or op == 'min_repeat':  # {m,n}, *, +
       min_repeat, max_repeat, sre = args
-      res = []
+      res: List[RE] = []
       main_res = sre_to_re(sre)
       if max_repeat >= MAX_REPEAT:
         for _ in range(min_repeat):
@@ -527,16 +541,15 @@ def sre_to_re(sre, alphabet=ALPHABET):
     if len(sre) == 1:
       return sre_to_re(sre[0])
     else:
-      res = map(sre_to_re, sre)
-      return REConcat(res)
+      return REConcat(map(sre_to_re, sre))
 
 
-def regex_str_to_re(regex_str):
-  sre = re.sre_parse.parse(regex_str)
+def regex_str_to_re(regex_str: Text) -> RE:
+  sre = sre_parse(regex_str)
   return sre_to_re(sre)
 
 
-def main(argv):
+def main(argv: List[Text]) -> None:
   num_partitions = 4 if len(argv) <= 1 else int(argv[1])
   regex_str = '(foo_[a-z]+|[a-f0-9]*)'
   regex_str = regex_str if len(argv) <= 2 else argv[2]
