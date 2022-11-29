@@ -140,23 +140,14 @@ class NFA(object):
         Returns:
           int: number of sequences accepted considering max_len and bound
         """
-
-        bound = iter(bound)
         eq1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         eq2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         gt1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         gt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         eq1[frozenset(self.start_nodes)] = 1
-        result = 0
+        result = self._sum_tables(eq1)
         c: Optional[Text] = None
-        try:
-            c = next(bound)
-        except StopIteration:
-            c = None
-        for _ in range(max_len):
-            if c is None:
-                result += self._sum_tables(eq1)
-            result += self._sum_tables(gt1)
+        for _, c in zip(range(max_len), itertools.chain(bound, itertools.repeat(None))):
             for nodes, count in gt1.items():
                 for element in self.possible_transitions(nodes):
                     next_nodes = frozenset(self.next_nodes(nodes, element))
@@ -168,15 +159,11 @@ class NFA(object):
                         gt2[next_nodes] += count
                     elif element == c:
                         eq2[next_nodes] += count
+            if c is None:
+                result += self._sum_tables(eq2)
+            result += self._sum_tables(gt2)
             eq1, eq2 = eq2, collections.defaultdict(int)
             gt1, gt2 = gt2, collections.defaultdict(int)
-            try:
-                c = next(bound)
-            except StopIteration:
-                c = None
-        if c is None:
-            result += self._sum_tables(eq1)
-        result += self._sum_tables(gt1)
         return result
 
     def ensure_disjoint(self, other_nfa: "NFA") -> None:
