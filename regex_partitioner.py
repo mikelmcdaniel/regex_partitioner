@@ -145,7 +145,7 @@ class NFA(object):
         gt1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         gt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         eq1[frozenset(self.start_nodes)] = 1
-        result = self._sum_tables(eq1)
+        result = 0
         c: Optional[Text] = None
         for _, c in zip(range(max_len), itertools.chain(bound, itertools.repeat(None))):
             for nodes, count in gt1.items():
@@ -159,12 +159,10 @@ class NFA(object):
                         gt2[next_nodes] += count
                     elif element == c:
                         eq2[next_nodes] += count
-            if c is None:
-                result += self._sum_tables(eq2)
             result += self._sum_tables(gt2)
             eq1, eq2 = eq2, collections.defaultdict(int)
             gt1, gt2 = gt2, collections.defaultdict(int)
-        return result
+        return result + self.accepts(bound)
 
     def ensure_disjoint(self, other_nfa: "NFA") -> None:
         offset = len(other_nfa.nodes)
