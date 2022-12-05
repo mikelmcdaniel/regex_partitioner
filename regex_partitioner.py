@@ -162,7 +162,7 @@ class NFA(object):
             result += self._sum_tables(gt2)
             eq1, eq2 = eq2, collections.defaultdict(int)
             gt1, gt2 = gt2, collections.defaultdict(int)
-        return result + self.accepts(bound)
+        return result + (len(bound) <= max_len and self.accepts(bound))
 
     def ensure_disjoint(self, other_nfa: "NFA") -> None:
         offset = len(other_nfa.nodes)
