@@ -517,7 +517,7 @@ def main(argv: List[Text]) -> None:
     regex_str = regex_str if len(argv) <= 2 else argv[2]
     lo = () if len(argv) <= 3 else argv[3]
     hi = None if len(argv) <= 4 or argv[4] == "None" else argv[4]
-    tolerance_ratio = 0.25 / num_partitions if len(argv) <= 5 else float(argv[5])
+    tolerance_ratio = 0.01 / num_partitions if len(argv) <= 5 else float(argv[5])
     max_len = 10 if len(argv) <= 6 else int(argv[6])
 
     t = regex_str_to_re(regex_str)
