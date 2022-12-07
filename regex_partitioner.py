@@ -523,6 +523,14 @@ def main(argv: List[Text]) -> None:
     t = regex_str_to_re(regex_str)
     nfa = t.as_nfa()
 
+    print(f"The regular expression {regex_str!r} accepts {nfa.num_accepts(max_len)} strings with length <= {max_len}.")
+    if lo or hi:
+        print(
+            f"Between {lo!r} and {hi!r}, {regex_str!r} accepts "
+            f"{nfa.num_accepts(max_len, lo) - nfa.num_accepts(max_len, hi)} with len <= {max_len}."
+        )
+    print()
+    print(f"These strings can be evenly split, within a {100 * tolerance_ratio:f}% tolerance by the strings:")
     print("\n".join("".join(x) for x in find_partition_seqs(nfa, max_len, num_partitions, lo, hi, tolerance_ratio)))
 
 
