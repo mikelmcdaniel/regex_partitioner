@@ -1,3 +1,4 @@
+import fractions
 import itertools
 import unittest
 
@@ -68,6 +69,46 @@ class Test(unittest.TestCase):
         for bound in sorted(all_strs):
             expected_num_accepts = sum(s >= bound for s in div_by_3_strs)
             self.assertEqual(expected_num_accepts, nfa.num_accepts(max_len, bound), f"{bound=}")
+
+    def test_regex_str_to_re(self):
+        nfa = regex_partitioner.regex_str_to_re("(apple)*|foo[0-9]{2,4}").as_nfa()
+        self.assertTrue(nfa.accepts(""))
+        self.assertTrue(nfa.accepts("apple"))
+        self.assertTrue(nfa.accepts("appleapple"))
+        self.assertTrue(nfa.accepts("appleappleapple"))
+        self.assertTrue(nfa.accepts("foo01"))
+        self.assertTrue(nfa.accepts("foo3210"))
+
+        self.assertFalse(nfa.accepts("app"))
+        self.assertFalse(nfa.accepts("applex"))
+        self.assertFalse(nfa.accepts("foo"))
+        self.assertFalse(nfa.accepts("foo0"))
+        self.assertFalse(nfa.accepts("foo1"))
+        self.assertFalse(nfa.accepts("foo12345"))
+
+    def test_find_partition_seq(self):
+        nfa = regex_partitioner.regex_str_to_re("[0-9]{4}").as_nfa()
+        self.assertTrue(nfa.accepts("0000"))
+        self.assertTrue(nfa.accepts("1234"))
+        self.assertTrue(nfa.accepts("9876"))
+        self.assertFalse(nfa.accepts(""))
+        self.assertFalse(nfa.accepts("01"))
+        self.assertFalse(nfa.accepts("123"))
+        self.assertFalse(nfa.accepts("12345"))
+        self.assertFalse(nfa.accepts("-1"))
+        self.assertFalse(nfa.accepts("1.2"))
+        self.assertEqual(10000, nfa.num_accepts(4))
+        self.assertEqual("", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=0)))
+        self.assertEqual("0000", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=0.0001)))
+        self.assertEqual("9999", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=1)))
+        self.assertEqual("4999", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=0.5)))
+        self.assertEqual("3332", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=1 / 3)))
+
+        for j in [1, 10000, 5000, 3333, 29, 4001, 7549]:
+            self.assertEqual(
+                f"{j - 1:04d}",
+                "".join(regex_partitioner.find_partition_seq(nfa, 4, fractions.Fraction(j, 10000))),
+            )
 
 
 if __name__ == "__main__":
