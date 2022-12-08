@@ -582,13 +582,14 @@ def main(argv: List[Text]) -> None:
     regex_str = regex_str if len(argv) <= 2 else argv[2]
     lo = () if len(argv) <= 3 else argv[3]
     hi = None if len(argv) <= 4 or argv[4] == "None" else argv[4]
-    tolerance_ratio = 0.01 / num_partitions if len(argv) <= 5 else float(argv[5])
+    tolerance_ratio = 0.001 / num_partitions if len(argv) <= 5 else float(argv[5])
     max_len = 10 if len(argv) <= 6 else int(argv[6])
 
     t = regex_str_to_re(regex_str)
     nfa = t.as_nfa()
 
-    print(f"The regular expression {regex_str!r} accepts {nfa.num_accepts(max_len)} strings with length <= {max_len}.")
+    total_num_accepts = nfa.num_accepts(max_len)
+    print(f"The regular expression {regex_str!r} accepts {total_num_accepts} strings with length <= {max_len}.")
     if lo or hi:
         print(
             f"Between {lo!r} and {hi!r}, {regex_str!r} accepts "
@@ -596,7 +597,15 @@ def main(argv: List[Text]) -> None:
         )
     print()
     print(f"These strings can be evenly split, within a {100 * tolerance_ratio:f}% tolerance by the strings:")
-    print("\n".join("".join(x) for x in find_partition_seqs(nfa, max_len, num_partitions, lo, hi, tolerance_ratio)))
+    for raw_seq in find_partition_seqs(nfa, max_len, num_partitions, lo, hi, tolerance_ratio):
+        # For even nicer output, we use nfa.prev_accepted(...) to get a partition that the regex accepts.
+        seq = "".join(raw_seq)
+        accepted_seq = "".join(raw_seq if nfa.accepts(raw_seq) else nfa.next_accepted(raw_seq, max_len) or raw_seq)
+        num_accepts = nfa.num_accepts(max_len, seq)
+        print(
+            f"  {regex_str!r} accepts {num_accepts} ({100 * num_accepts / total_num_accepts}%) "
+            f"of strings after {accepted_seq!r} (or {seq!r})."
+        )
 
 
 if __name__ == "__main__":
