@@ -70,6 +70,22 @@ class Test(unittest.TestCase):
             expected_num_accepts = sum(s >= bound for s in div_by_3_strs)
             self.assertEqual(expected_num_accepts, nfa.num_accepts(max_len, bound), f"{bound=}")
 
+        self.assertEqual("0", nfa.next_accepted("", 3))
+        self.assertEqual(None, nfa.next_accepted("999", 3))
+        self.assertEqual("6", nfa.next_accepted("5", 1))
+        self.assertEqual("501", nfa.next_accepted("5", 3))
+        self.assertEqual("504", nfa.next_accepted("502", 3))
+        self.assertEqual("9", nfa.next_accepted("6", 1))
+        self.assertEqual("60", nfa.next_accepted("6", 3))
+        self.assertEqual("600", nfa.next_accepted("60", 3))
+        self.assertEqual("600", nfa.next_accepted("60", 3))
+
+        div_by_3_strs_iter = iter(sorted(div_by_3_strs))
+        prev = next(div_by_3_strs_iter)
+        for cur in div_by_3_strs_iter:
+            self.assertEqual(cur, nfa.next_accepted(prev, 3))
+            prev = cur
+
     def test_regex_str_to_re(self):
         nfa = regex_partitioner.regex_str_to_re("(apple)*|foo[0-9]{2,4}").as_nfa()
         self.assertTrue(nfa.accepts(""))

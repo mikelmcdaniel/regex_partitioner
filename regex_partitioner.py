@@ -56,11 +56,11 @@ class NFA(object):
         self.nodes: Dict[int, Dict[Optional[Text], Set[int]]] = collections.defaultdict(
             lambda: collections.defaultdict(set)
         )
-        self.start_nodes = set()
-        self.accept_nodes = set()
-        self.alphabet = []  # ['a', 'b', 'c', ..., 'z']
-        self.inverse_alphabet = {}  # {'a': 0, 'b': 1, ..., 'z': 25}
-        self._m = {}
+        self.start_nodes: Set[int] = set()
+        self.accept_nodes: Set[int] = set()
+        self.alphabet: List[Text] = []  # ['a', 'b', 'c', ..., 'z']
+        self.inverse_alphabet: Dict[Text, int] = {}  # {'a': 0, 'b': 1, ..., 'z': 25}
+        self._m = {}  # a cache for self.next_nodes(...)
 
     def add_node(self) -> int:
         new_node_id = len(self.nodes)
@@ -119,10 +119,44 @@ class NFA(object):
         return self._m[cur_nodes, sequence_element]
 
     def accepts(self, sequence: Iterable[Text]) -> bool:
-        cur_nodes = self.start_nodes
+        cur_nodes: FrozenSet[int] = self.start_nodes
         for item in sequence:
             cur_nodes = self.next_nodes(cur_nodes, item)
         return not self.accept_nodes.isdisjoint(cur_nodes)
+
+    def next_accepted(self, sequence: Iterable[Text], max_len: int) -> Optional[Text]:
+        """Returns the smallest string up to max_len characters accepted by this NFA greater than sequence."""
+        max_hi = num_seqs_with_max_len(len(self.alphabet), max_len)
+        desired_num_accepted = self.num_accepts(max_len, sequence) - self.accepts(sequence)
+        lo = seq_to_num(sequence, self.inverse_alphabet, max_len) + 1
+
+        # We don't have an upper bound on where the next_accepted string is, so we look at an exponentially increasing
+        # gap above low until we find at least one accepted string.
+        diff = 1
+        while True:
+            hi = lo + diff
+            if hi >= max_hi:
+                hi = max_hi - 1
+                break
+            hi_seq = "".join(num_to_seq(hi, self.alphabet, max_len))
+            hi_num_accepted = self.num_accepts(max_len, hi_seq)
+            if hi_num_accepted < desired_num_accepted:
+                break
+            lo = hi
+            diff *= 2
+
+        # Now we know that the string we're looking for is [lo, hi]. The upper bound is inclusive!
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            mid_seq = "".join(num_to_seq(mid, self.alphabet, max_len))
+            mid_num_accepted = self.num_accepts(max_len, mid_seq)
+            if mid_num_accepted < desired_num_accepted:
+                hi = mid - 1
+            elif mid_num_accepted == desired_num_accepted and self.accepts(mid_seq):
+                return mid_seq
+            else:  # elif mid_num_accepted > desired_num_accepted:
+                lo = mid + 1
+        return None  # There is no next sequence!
 
     def _sum_tables(self, table: Dict[FrozenSet[int], int]) -> int:
         return sum(count for nodes, count in table.items() if any(node in self.accept_nodes for node in nodes))
