@@ -124,6 +124,37 @@ class NFA(object):
             cur_nodes = self.next_nodes(cur_nodes, item)
         return not self.accept_nodes.isdisjoint(cur_nodes)
 
+    def prev_accepted(self, sequence: Iterable[Text], max_len: int) -> Optional[Text]:
+        """Returns the largest string up to max_len characters accepted by this NFA less than sequence."""
+        desired_num_accepted = self.num_accepts(max_len, sequence) + 1
+        hi = seq_to_num(sequence, self.inverse_alphabet, max_len)
+
+        # We don't have a lower bound on where the next_accepted string is, so we look at an exponentially increasing
+        # gap above low until we find at least one accepted string.
+        diff = 1
+        while True:
+            lo = hi - diff
+            if lo <= 0:
+                lo = 0
+                break
+            lo_seq = "".join(num_to_seq(lo, self.alphabet, max_len))
+            lo_num_accepted = self.num_accepts(max_len, lo_seq)
+            if lo_num_accepted > desired_num_accepted:
+                break
+            diff *= 2
+
+        while lo <= hi:
+            mid = (lo + hi) // 2
+            mid_seq = "".join(num_to_seq(mid, self.alphabet, max_len))
+            mid_num_accepted = self.num_accepts(max_len, mid_seq)
+            if mid_num_accepted < desired_num_accepted:
+                hi = mid - 1
+            elif mid_num_accepted == desired_num_accepted and self.accepts(mid_seq):
+                return mid_seq
+            else:  # elif mid_num_accepted > desired_num_accepted:
+                lo = mid + 1
+        return None  # There is no previous sequence!
+
     def next_accepted(self, sequence: Iterable[Text], max_len: int) -> Optional[Text]:
         """Returns the smallest string up to max_len characters accepted by this NFA greater than sequence."""
         max_hi = num_seqs_with_max_len(len(self.alphabet), max_len)
