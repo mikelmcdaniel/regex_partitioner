@@ -7,6 +7,7 @@ between the lower and upper bounds that the NFA accepts with a maximum length
 such the target ratio +- the tolerance ratio of the sequences are
 lexicographically less than result.
 """
+import argparse
 import collections
 import copy
 import fractions
@@ -577,16 +578,23 @@ def regex_str_to_re(regex_str: Text) -> RE:
 
 
 def main(argv: List[Text]) -> None:
-    num_partitions = 4 if len(argv) <= 1 else int(argv[1])
-    regex_str = "(foo_[a-z]+|[a-f0-9]*)"
-    regex_str = regex_str if len(argv) <= 2 else argv[2]
-    lo = () if len(argv) <= 3 else argv[3]
-    hi = None if len(argv) <= 4 or argv[4] == "None" else argv[4]
-    tolerance_ratio = 0.001 / num_partitions if len(argv) <= 5 else float(argv[5])
-    max_len = 10 if len(argv) <= 6 else int(argv[6])
+    parser = argparse.ArgumentParser()
+    parser.add_argument("regex", type=str)
+    parser.add_argument("-p", "--partitions", default=4, dest="num_partitions", type=int)
+    parser.add_argument("-l", "--lower_bound", default="", dest="lower_bound", type=str)
+    parser.add_argument("-u", "--upper_bound", default=None, dest="upper_bound")
+    parser.add_argument("-t", "--tolerance_ratio", default=0.001, dest="tolerance_ratio", type=float)
+    parser.add_argument("-m", "--max_str_len", default=10, dest="max_len", type=int)
+    args = parser.parse_args(argv[1:])
 
-    t = regex_str_to_re(regex_str)
-    nfa = t.as_nfa()
+    num_partitions = args.num_partitions
+    regex_str = args.regex
+    lo = args.lower_bound
+    hi = args.upper_bound
+    tolerance_ratio = args.tolerance_ratio
+    max_len = args.max_len
+
+    nfa = regex_str_to_re(regex_str).as_nfa()
 
     total_num_accepts = nfa.num_accepts(max_len)
     print(f"The regular expression {regex_str!r} accepts {total_num_accepts} strings with length <= {max_len}.")
