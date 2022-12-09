@@ -212,8 +212,7 @@ class NFA(object):
         gt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         eq1[frozenset(self.start_nodes)] = 1
         result = 0
-        c: Optional[Text] = None
-        for _, c in zip(range(max_len), itertools.chain(bound, itertools.repeat(None))):
+        for c in itertools.islice(itertools.chain(bound, itertools.repeat(None)), 0, max_len):
             for nodes, count in gt1.items():
                 for element in self.possible_transitions(nodes):
                     next_nodes = frozenset(self.next_nodes(nodes, element))
@@ -230,11 +229,7 @@ class NFA(object):
                 break  # Exit early if we know this regex cannot accept anymore strings.
             eq1, eq2 = eq2, collections.defaultdict(int)
             gt1, gt2 = gt2, collections.defaultdict(int)
-        try:
-            len_bound: int = len(bound)
-        except TypeError:
-            len_bound = sum(1 for _ in bound)
-        return result + (len_bound <= max_len and self.accepts(bound))
+        return result + (len(bound) <= max_len and self.accepts(bound))
 
     def ensure_disjoint(self, other_nfa: "NFA") -> None:
         offset = len(other_nfa.nodes)
