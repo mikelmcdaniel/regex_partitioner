@@ -97,6 +97,10 @@ class Test(unittest.TestCase):
             self.assertEqual(cur, nfa.next_accepted(prev, 3))
             prev = cur
 
+    def test_nfa_num_accepts_early_exit(self):
+        nfa = regex_partitioner.regex_str_to_re("apple|banana|coconut").as_nfa()
+        self.assertEqual(3, nfa.num_accepts(max_len=2 ** 31))
+
     def test_regex_str_to_re(self):
         nfa = regex_partitioner.regex_str_to_re("(apple)*|foo[0-9]{2,4}").as_nfa()
         self.assertTrue(nfa.accepts(""))

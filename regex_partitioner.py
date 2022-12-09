@@ -226,6 +226,8 @@ class NFA(object):
                     elif element == c:
                         eq2[next_nodes] += count
             result += self._sum_tables(gt2)
+            if not gt2 and not eq2:
+                break  # Exit early if we know this regex cannot accept anymore strings.
             eq1, eq2 = eq2, collections.defaultdict(int)
             gt1, gt2 = gt2, collections.defaultdict(int)
         try:
