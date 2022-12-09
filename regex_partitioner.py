@@ -16,7 +16,7 @@ import re
 import string
 import sys
 
-from typing import Dict, Iterable, Iterator, FrozenSet, List, Optional, Set, Text, Tuple
+from typing import Dict, Iterable, Iterator, FrozenSet, List, Optional, Set, Sequence, Text, Tuple
 
 
 def sre_parse(regex_str: Text) -> Tuple:
@@ -120,12 +120,12 @@ class NFA(object):
         return self._m[cur_nodes, sequence_element]
 
     def accepts(self, sequence: Iterable[Text]) -> bool:
-        cur_nodes: FrozenSet[int] = self.start_nodes
+        cur_nodes: FrozenSet[int] | Set[int] = self.start_nodes
         for item in sequence:
             cur_nodes = self.next_nodes(cur_nodes, item)
         return not self.accept_nodes.isdisjoint(cur_nodes)
 
-    def prev_accepted(self, sequence: Iterable[Text], max_len: int) -> Optional[Text]:
+    def prev_accepted(self, sequence: Sequence[Text], max_len: int) -> Optional[Text]:
         """Returns the largest string up to max_len characters accepted by this NFA less than sequence."""
         desired_num_accepted = self.num_accepts(max_len, sequence) + 1
         hi = seq_to_num(sequence, self.inverse_alphabet, max_len)
@@ -156,7 +156,7 @@ class NFA(object):
                 lo = mid + 1
         return None  # There is no previous sequence!
 
-    def next_accepted(self, sequence: Iterable[Text], max_len: int) -> Optional[Text]:
+    def next_accepted(self, sequence: Sequence[Text], max_len: int) -> Optional[Text]:
         """Returns the smallest string up to max_len characters accepted by this NFA greater than sequence."""
         max_hi = num_seqs_with_max_len(len(self.alphabet), max_len)
         desired_num_accepted = self.num_accepts(max_len, sequence) - self.accepts(sequence)
@@ -193,7 +193,7 @@ class NFA(object):
     def _sum_tables(self, table: Dict[FrozenSet[int], int]) -> int:
         return sum(count for nodes, count in table.items() if any(node in self.accept_nodes for node in nodes))
 
-    def num_accepts(self, max_len: int, bound: Iterable[Text] = ()) -> int:
+    def num_accepts(self, max_len: int, bound: Sequence[Text] = ()) -> int:
         """Returns the number of sequences accepted by this NFA.
 
         Return the number of sequences with length less than or equal to max_len
@@ -462,8 +462,8 @@ def find_partition_seq(
     max_letter = max(nfa.alphabet)
     lo: int = seq_to_num(low, nfa.inverse_alphabet, max_len)
     hi: int = seq_to_num((max_letter for _ in range(max_len)) if high is None else high, nfa.inverse_alphabet, max_len)
-    lo_num_accepts = nfa.num_accepts(max_len, num_to_seq(lo, nfa.alphabet, max_len))
-    hi_num_accepts = nfa.num_accepts(max_len, num_to_seq(hi, nfa.alphabet, max_len))
+    lo_num_accepts = nfa.num_accepts(max_len, tuple(num_to_seq(lo, nfa.alphabet, max_len)))
+    hi_num_accepts = nfa.num_accepts(max_len, tuple(num_to_seq(hi, nfa.alphabet, max_len)))
     total = lo_num_accepts - hi_num_accepts
     assert total >= 0
     target = lo_num_accepts - int(total * target_ratio)
@@ -475,7 +475,7 @@ def find_partition_seq(
             assert mid <= hi
         else:
             mid = (lo + hi) // 2
-        mid_str = num_to_seq(mid, nfa.alphabet, max_len)
+        mid_str = tuple(num_to_seq(mid, nfa.alphabet, max_len))
         mid_num_accepts = nfa.num_accepts(max_len, mid_str)
         if lo >= hi or mid_num_accepts == target or abs(lo_num_accepts - hi_num_accepts) <= tolerance:
             break
@@ -495,7 +495,7 @@ def find_partition_seqs(
     lo: Iterable[Text] = (),
     hi: Optional[Iterable[Text]] = None,
     tolerance_ratio: float = 0.0,
-) -> Iterable[Iterable[Text]]:
+) -> Iterable[Sequence[Text]]:
     return tuple(
         find_partition_seq(nfa, max_len, fractions.Fraction(j, num_partitions), lo, hi, tolerance_ratio)
         for j in range(1, num_partitions)

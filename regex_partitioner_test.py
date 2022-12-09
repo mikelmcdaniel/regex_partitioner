@@ -119,6 +119,7 @@ class Test(unittest.TestCase):
 
     def test_find_partition_seq(self):
         nfa = regex_partitioner.regex_str_to_re("[0-9]{4}").as_nfa()
+        self.assertEqual(10000, nfa.num_accepts(99))
         self.assertTrue(nfa.accepts("0000"))
         self.assertTrue(nfa.accepts("1234"))
         self.assertTrue(nfa.accepts("9876"))
@@ -129,17 +130,16 @@ class Test(unittest.TestCase):
         self.assertFalse(nfa.accepts("-1"))
         self.assertFalse(nfa.accepts("1.2"))
         self.assertEqual(10000, nfa.num_accepts(4))
+        # Note: These exact values aren't important. A small change in find_partition_seq can lead to slightly different
+        # but equally valid results! For example, the "4001" test case could return "4", "40", "400", or "4000"
         self.assertEqual("", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=0)))
-        self.assertEqual("0000", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=0.0001)))
+        self.assertEqual("", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=0.0001)))
         self.assertEqual("9999", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=1)))
         self.assertEqual("4999", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=0.5)))
-        self.assertEqual("3332", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=1 / 3)))
-
-        for j in [1, 10000, 5000, 3333, 29, 4001, 7549]:
-            self.assertEqual(
-                f"{j - 1:04d}",
-                "".join(regex_partitioner.find_partition_seq(nfa, 4, fractions.Fraction(j, 10000))),
-            )
+        self.assertEqual("3333", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=1 / 3)))
+        self.assertEqual("0028", "".join(regex_partitioner.find_partition_seq(nfa, 4, fractions.Fraction(29, 10000))))
+        self.assertEqual("4", "".join(regex_partitioner.find_partition_seq(nfa, 4, fractions.Fraction(4001, 10000))))
+        self.assertEqual("7548", "".join(regex_partitioner.find_partition_seq(nfa, 4, fractions.Fraction(7549, 10000))))
 
 
 if __name__ == "__main__":
