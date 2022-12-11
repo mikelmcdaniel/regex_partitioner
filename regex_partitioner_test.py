@@ -117,6 +117,22 @@ class Test(unittest.TestCase):
         self.assertFalse(nfa.accepts("foo1"))
         self.assertFalse(nfa.accepts("foo12345"))
 
+        nfa = regex_partitioner.regex_str_to_re(".x").as_nfa()
+        self.assertTrue(nfa.accepts("ax"))
+        self.assertFalse(nfa.accepts("x"))
+        self.assertFalse(nfa.accepts("xxx"))
+
+    def test_regex_str_to_re_categories(self):
+        nfa = regex_partitioner.regex_str_to_re("\w\d\W\D\s\S").as_nfa()
+        self.assertTrue(nfa.accepts("b2!! !"))
+        self.assertTrue(nfa.accepts("a11a a"))
+        self.assertFalse(nfa.accepts("111a a"))
+        self.assertFalse(nfa.accepts("aa1a a"))
+        self.assertFalse(nfa.accepts("a1aa a"))
+        self.assertFalse(nfa.accepts("a111 a"))
+        self.assertFalse(nfa.accepts("a11aaa"))
+        self.assertFalse(nfa.accepts("a11a  "))
+
     def test_find_partition_seq(self):
         nfa = regex_partitioner.regex_str_to_re("[0-9]{4}").as_nfa()
         self.assertEqual(10000, nfa.num_accepts(99))

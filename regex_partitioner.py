@@ -513,14 +513,18 @@ def sre_to_re(sre, alphabet: FrozenSet[Text] = ALPHABET) -> RE:
             sres = args
             return REOr(map(sre_to_re, sres))
         elif op == "category":  # or (\d, \W)
-            if args == "category_digit":
+            if args == re.sre_parse.CATEGORY_DIGIT:
                 return REOr([RESequence(c) for c in string.digits if c in alphabet])
-            elif args == "category_not_digit":
+            elif args == re.sre_parse.CATEGORY_NOT_DIGIT:
                 return REOr([RESequence(d) for d in alphabet if d not in string.digits])
-            elif args == "category_word":
+            elif args == re.sre_parse.CATEGORY_WORD:
                 return REOr([RESequence(c) for c in string.ascii_letters if c in alphabet])
-            elif args == "category_not_word":
+            elif args == re.sre_parse.CATEGORY_NOT_WORD:
                 return REOr([RESequence(d) for d in alphabet if d not in string.ascii_letters])
+            elif args == re.sre_parse.CATEGORY_SPACE:
+                return REOr([RESequence(c) for c in string.whitespace if c in alphabet])
+            elif args == re.sre_parse.CATEGORY_NOT_SPACE:
+                return REOr([RESequence(d) for d in alphabet if d not in string.whitespace])
             else:
                 raise Exception(f'Unknown category type "{args!r}".')
         elif op == "assert":  # (?=REGEX)
