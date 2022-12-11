@@ -12,15 +12,11 @@ import collections
 import copy
 import fractions
 import itertools
-import re
+from re import sre_parse  # type: ignore
 import string
 import sys
 
 from typing import Dict, Iterable, Iterator, FrozenSet, List, Optional, Set, Sequence, Text, Tuple
-
-
-def sre_parse(regex_str: Text) -> Tuple:
-    return re.sre_parse.parse(regex_str)  # type: ignore
 
 
 def num_seqs_with_max_len(alphabet_size: int, max_len: int) -> int:
@@ -497,7 +493,7 @@ def find_partition_seqs(
     )
 
 
-MAX_REPEAT = sre_parse("a*")[0][1][1]
+MAX_REPEAT = sre_parse.MAX_REPEAT
 ALPHABET: FrozenSet[Text] = frozenset(string.printable)
 
 
@@ -513,17 +509,17 @@ def sre_to_re(sre, alphabet: FrozenSet[Text] = ALPHABET) -> RE:
             sres = args
             return REOr(map(sre_to_re, sres))
         elif op == "category":  # or (\d, \W)
-            if args == re.sre_parse.CATEGORY_DIGIT:
+            if args == sre_parse.CATEGORY_DIGIT:
                 return REOr([RESequence(c) for c in string.digits if c in alphabet])
-            elif args == re.sre_parse.CATEGORY_NOT_DIGIT:
+            elif args == sre_parse.CATEGORY_NOT_DIGIT:
                 return REOr([RESequence(d) for d in alphabet if d not in string.digits])
-            elif args == re.sre_parse.CATEGORY_WORD:
+            elif args == sre_parse.CATEGORY_WORD:
                 return REOr([RESequence(c) for c in string.ascii_letters if c in alphabet])
-            elif args == re.sre_parse.CATEGORY_NOT_WORD:
+            elif args == sre_parse.CATEGORY_NOT_WORD:
                 return REOr([RESequence(d) for d in alphabet if d not in string.ascii_letters])
-            elif args == re.sre_parse.CATEGORY_SPACE:
+            elif args == sre_parse.CATEGORY_SPACE:
                 return REOr([RESequence(c) for c in string.whitespace if c in alphabet])
-            elif args == re.sre_parse.CATEGORY_NOT_SPACE:
+            elif args == sre_parse.CATEGORY_NOT_SPACE:
                 return REOr([RESequence(d) for d in alphabet if d not in string.whitespace])
             else:
                 raise Exception(f'Unknown category type "{args!r}".')
@@ -574,7 +570,7 @@ def sre_to_re(sre, alphabet: FrozenSet[Text] = ALPHABET) -> RE:
 
 
 def regex_str_to_re(regex_str: Text) -> RE:
-    sre = sre_parse(regex_str)
+    sre = sre_parse.parse(regex_str)
     return sre_to_re(sre)
 
 
