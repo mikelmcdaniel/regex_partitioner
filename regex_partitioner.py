@@ -15,6 +15,7 @@ import itertools
 import re
 import string
 import sys
+import timeit
 
 from typing import Dict, Iterable, Iterator, FrozenSet, List, Optional, Set, Sequence, Text, Tuple
 
@@ -230,6 +231,260 @@ class NFA(object):
             eq1, eq2 = eq2, collections.defaultdict(int)
             gt1, gt2 = gt2, collections.defaultdict(int)
         return result + (len(bound) <= max_len and self.accepts(bound))
+
+
+    def _build_next_stats_tables(self, bound_repeating_suffix: Sequence[Text]):
+        # build map of start_node, brs_index, steps -> (num_accepted, {nodes, count for nodes in all nodes})
+        next_states_lt: Dict[Tuple[int, int, int], Tuple[int, Dict[FrozenSet[int], int]]] = {}
+        next_states_eq: Dict[Tuple[int, int, int], Tuple[int, int, Dict[FrozenSet[int], int], Dict[FrozenSet[int], int], Dict[FrozenSet[int], int]]] = {}
+        next_states_gt: Dict[Tuple[int, int, int], Tuple[int, Dict[FrozenSet[int], int]]] = {}
+        for start_node in self.nodes:
+            for brs_index, c in enumerate(bound_repeating_suffix):
+                #
+                # eq
+                #
+                lt: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+                eq: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+                gt: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+                num_accepted = 0
+                nodes = frozenset([start_node])
+                for element in self.possible_transitions(nodes):
+                    next_nodes = frozenset(self.next_nodes(nodes, element))
+                    if c is None or (element is not None and element > c):
+                        gt[next_nodes] += 1
+                    elif element == c:
+                        eq[next_nodes] += 1
+                    else:
+                        lt[next_nodes] += 1
+                # num_accepted += self._sum_tables(eq)
+                num_accepted += self._sum_tables(gt)
+                next_states_eq[start_node, brs_index, 1] = self._sum_tables(lt), num_accepted, lt, eq, gt
+                #
+                # gt
+                #
+                del lt
+                del eq
+                gt: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+                num_accepted = 0
+                nodes = frozenset([start_node])
+                for element in self.possible_transitions(nodes):
+                    next_nodes = frozenset(self.next_nodes(nodes, element))
+                    gt[next_nodes] += 1
+                num_accepted += self._sum_tables(gt)
+                next_states_gt[start_node, brs_index, 1] = num_accepted, gt
+                #
+                # lt
+                #
+                del gt
+                lt: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+                num_accepted = 0
+                nodes = frozenset([start_node])
+                for element in self.possible_transitions(nodes):
+                    next_nodes = frozenset(self.next_nodes(nodes, element))
+                    lt[next_nodes] += 1
+                num_accepted += self._sum_tables(lt)
+                next_states_lt[start_node, brs_index, 1] = num_accepted, lt
+        return next_states_lt, next_states_eq, next_states_gt
+
+    def _double_next_states_tables(self, next_states_lt, next_states_eq, next_states_gt, bound_repeating_suffix):
+        next_states_lt2 = {}
+        next_states_eq2 = {}
+        next_states_gt2 = {}
+
+        for (start_node, brs_index, step), (num_accepts_lt, num_accepts, lt1, eq1, gt1) in next_states_eq.items():
+            lt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+            eq2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+            gt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+            num_accepts2_lt = 0
+            num_accepts2 = 0
+            next_brs_index = (brs_index + step) % len(bound_repeating_suffix)
+            #eq
+            eq1_counts = collections.defaultdict(int)
+            for nodes, count in eq1.items():
+                for node in nodes:
+                    eq1_counts[node] += count
+            for node, count in eq1_counts.items():
+                accepted_from_start_to_node_lt, accepted_from_start_to_node, sub_lt1, sub_eq1, sub_gt1 = next_states_eq[node, next_brs_index, step]
+                num_accepts2 += accepted_from_start_to_node * count
+                num_accepts2_lt += accepted_from_start_to_node_lt * count
+                for future_nodes, future_count in sub_lt1.items():
+                    lt2[future_nodes] += future_count * count
+                for future_nodes, future_count in sub_eq1.items():
+                    eq2[future_nodes] += future_count * count
+                for future_nodes, future_count in sub_gt1.items():
+                    gt2[future_nodes] += future_count * count
+            # gt
+            gt1_counts = collections.defaultdict(int)
+            for nodes, count in gt1.items():
+                for node in nodes:
+                    gt1_counts[node] += count
+            for node, count in gt1_counts.items():
+                accepted_from_start_to_node, sub_gt1 = next_states_gt[node, next_brs_index, step]
+                num_accepts2 += accepted_from_start_to_node * count
+                for future_nodes, future_count in sub_gt1.items():
+                    gt2[future_nodes] += future_count * count
+            # lt
+            lt1_counts = collections.defaultdict(int)
+            for nodes, count in lt1.items():
+                for node in nodes:
+                    lt1_counts[node] += count
+            for node, count in lt1_counts.items():
+                accepted_from_start_to_node, sub_lt1 = next_states_lt[node, next_brs_index, step]
+                num_accepts2_lt += accepted_from_start_to_node * count
+                for future_nodes, future_count in sub_lt1.items():
+                    lt2[future_nodes] += future_count * count
+            next_states_eq2[start_node, brs_index, 2 * step] = (num_accepts_lt + num_accepts2_lt, num_accepts + num_accepts2, lt2, eq2, gt2)
+
+        for (start_node, brs_index, step), (num_accepts, gt1) in next_states_gt.items():
+            gt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+            num_accepts2 = 0
+            next_brs_index = (brs_index + step) % len(bound_repeating_suffix)
+            gt1_counts = collections.defaultdict(int)
+            for nodes, count in gt1.items():
+                for node in nodes:
+                    gt1_counts[node] += count
+            for node, count in gt1_counts.items():
+                accepted_from_start_to_node, sub_gt1 = next_states_gt[node, next_brs_index, step]
+                num_accepts2 += accepted_from_start_to_node * count
+                for future_nodes, future_count in sub_gt1.items():
+                    gt2[future_nodes] += future_count * count
+            next_states_gt2[start_node, brs_index, 2 * step] = (num_accepts + num_accepts2, gt2)
+
+        for (start_node, brs_index, step), (num_accepts_lt, lt1) in next_states_lt.items():
+            lt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+            num_accepts2_lt = 0
+            next_brs_index = (brs_index + step) % len(bound_repeating_suffix)
+            lt1_counts = collections.defaultdict(int)
+            for nodes, count in lt1.items():
+                for node in nodes:
+                    lt1_counts[node] += count
+            for node, count in lt1_counts.items():
+                accepted_from_start_to_node, sub_lt1 = next_states_lt[node, next_brs_index, step]
+                num_accepts2_lt += accepted_from_start_to_node * count
+                for future_nodes, future_count in sub_lt1.items():
+                    lt2[future_nodes] += future_count * count
+            next_states_lt2[start_node, brs_index, 2 * step] = (num_accepts_lt + num_accepts2_lt, lt2)
+
+        return next_states_lt2, next_states_eq2, next_states_gt2
+
+    def _divide_next_states_tables(self, next_states_lt, next_states_eq, next_states_gt, max_total_count):
+        total_count = 0
+        for (start_node, brs_index, step), (num_accepts_lt, num_accepts, lt1, eq1, gt1) in next_states_eq.items():
+            total_count += sum(count for _, count in itertools.chain(lt1.items(), eq1.items(), gt1.items()))
+        for (start_node, brs_index, step), (num_accepts, lt1) in next_states_lt.items():
+            total_count += sum(count for _, count in lt1.items())
+        for (start_node, brs_index, step), (num_accepts, gt1) in next_states_gt.items():
+            total_count += sum(count for _, count in gt1.items())
+
+        base_2_exp = int(total_count // max_total_count).bit_length()
+        divisor = 2.0**base_2_exp
+        if total_count > max_total_count:
+            for (start_node, brs_index, step), (num_accepts_lt, num_accepts, lt1, eq1, gt1) in next_states_eq.items():
+                for nodes_counts in (lt1, eq1, gt1):
+                    for nodes, count in nodes_counts.items():
+                        nodes_counts[nodes] = count / divisor
+            for (start_node, brs_index, step), (num_accepts, lt1) in next_states_lt.items():
+                    for nodes, count in lt1.items():
+                        lt1[nodes] = count / divisor
+            for (start_node, brs_index, step), (num_accepts, gt1) in next_states_gt.items():
+                    for nodes, count in gt1.items():
+                        gt1[nodes] = count / divisor
+            total_count //= divisor
+        return base_2_exp
+
+
+    def num_accepts2(self, n, bound: Sequence[Text] = (), bound_repeating_suffix: Sequence[Text] = (None,)) -> int:
+        assert len(bound_repeating_suffix) > 0
+        max_total_count = 2**30
+        lt1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+        lt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+        eq1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+        eq2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+        gt1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+        gt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+        eq1[frozenset(self.start_nodes)] = 1
+        result_lt = 0
+        result_ge = 0
+        base_2_exp = 0
+        if 2**n > len(bound):
+            bound = bound[:2**n]
+        for c in bound:
+            for nodes, count in gt1.items():
+                for element in self.possible_transitions(nodes):
+                    next_nodes = frozenset(self.next_nodes(nodes, element))
+                    gt2[next_nodes] += count
+            for nodes, count in lt1.items():
+                for element in self.possible_transitions(nodes):
+                    next_nodes = frozenset(self.next_nodes(nodes, element))
+                    lt2[next_nodes] += count
+            for nodes, count in eq1.items():
+                for element in self.possible_transitions(nodes):
+                    next_nodes = frozenset(self.next_nodes(nodes, element))
+                    if c is None or (element is not None and element > c):
+                        gt2[next_nodes] += count
+                    elif element == c:
+                        eq2[next_nodes] += count
+                    else:
+                        lt2[next_nodes] += count
+            result_lt += self._sum_tables(lt2)
+            result_ge += self._sum_tables(gt2)
+            # if not gt2 and not eq2:
+            #     break  # Exit early if we know this regex cannot accept anymore strings.
+            lt1, lt2 = lt2, collections.defaultdict(int)
+            eq1, eq2 = eq2, collections.defaultdict(int)
+            gt1, gt2 = gt2, collections.defaultdict(int)
+
+            # Normalize results if needed
+            total_count = sum(count for _, count in itertools.chain(lt1.items(), eq1.items(), gt1.items()))
+            if total_count > max_total_count:
+                divisor_exp = (total_count / max_total_count).bit_length()
+                divisor = 2.0**divisor_exp
+                for nodes_counts in (lt1, eq1, gt1):
+                    for nodes, count in nodes_counts.items():
+                        nodes_counts[nodes] = count / divisor
+                total_count //= divisor
+                result_lt /= divisor
+                result_ge /= divisor
+                base_2_exp += divisor_exp
+
+        next_states_lt, next_states_eq, next_states_gt = self._build_next_stats_tables(bound_repeating_suffix)
+        step = 1
+        base_2_exp_additional = 0
+        for _ in range(n):
+            next_states_lt, next_states_eq, next_states_gt = self._double_next_states_tables(
+                next_states_lt, next_states_eq, next_states_gt, bound_repeating_suffix)
+            step *= 2
+            base_2_exp_additional = self._divide_next_states_tables(next_states_lt, next_states_eq, next_states_gt, max_total_count)
+            result_lt /= 2.0**base_2_exp_additional
+            result_ge /= 2.0**base_2_exp_additional
+            base_2_exp += base_2_exp_additional
+
+        lt_node_counts = collections.defaultdict(int)
+        for start_nodes, count in lt1.items():
+            for start_node in start_nodes:
+                lt_node_counts[start_node] += count
+        eq_node_counts = collections.defaultdict(int)
+        for start_nodes, count in eq1.items():
+            for start_node in start_nodes:
+                eq_node_counts[start_node] += count
+        gt_node_counts = collections.defaultdict(int)
+        for start_nodes, count in gt1.items():
+            for start_node in start_nodes:
+                gt_node_counts[start_node] += count
+
+        brs_index = 0
+        for start_node, count in lt_node_counts.items():
+            additional_accepted, _ = next_states_lt[start_node, brs_index, step]
+            result_lt += additional_accepted * count
+        for start_node, count in eq_node_counts.items():
+            additional_accepted_lt, additional_accepted, _, _, _ = next_states_eq[start_node, brs_index, step]
+            result_lt += additional_accepted_lt * count
+            result_ge += additional_accepted * count
+        for start_node, count in gt_node_counts.items():
+            additional_accepted, _ = next_states_gt[start_node, brs_index, step]
+            result_ge += additional_accepted * count
+
+        return result_ge / (result_lt + result_ge)
 
     def ensure_disjoint(self, other_nfa: "NFA") -> None:
         offset = len(other_nfa.nodes)
@@ -614,4 +869,28 @@ def main(argv: List[Text]) -> None:
 
 
 if __name__ == "__main__":
-    main(sys.argv)
+    # main(sys.argv)
+
+    nfa = NFA()
+    # Make an NFA that accepts base-10 numbers divisible by 3
+    # Note: We consider the string "" to be the same as "0"
+    zero = nfa.add_node()
+    one = nfa.add_node()
+    two = nfa.add_node()
+    nfa.start_nodes.add(zero)
+    nfa.accept_nodes.add(zero)
+    nodes = [zero, one, two]
+    for start_val, start_node in enumerate(nodes):
+        for next_digit in range(10):
+            new_val = (start_val * 10 + next_digit) % 3
+            new_node = nodes[new_val]
+            nfa.add_transition(start_node, new_node, str(next_digit))
+    nfa = regex_str_to_re("[0-9]+").as_nfa()
+    bound = ""
+    brs = "23"
+    for n in range(1111):
+        import time
+        start_time = time.time()
+        b = nfa.num_accepts2(n, bound, brs)
+        bt = time.time() - start_time
+        print(n, b, bt)
