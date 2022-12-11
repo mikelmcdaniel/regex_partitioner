@@ -123,7 +123,7 @@ class NFA(object):
 
     def prev_accepted(self, sequence: Sequence[Text], max_len: int) -> Optional[Text]:
         """Returns the largest string up to max_len characters accepted by this NFA less than sequence."""
-        desired_num_accepted = self.num_accepts(max_len, sequence) + 1
+        desired_num_accepted = self.num_accepts_ge(max_len, sequence) + 1
         hi = seq_to_num(sequence, self.inverse_alphabet, max_len)
 
         # We don't have a lower bound on where the next_accepted string is, so we look at an exponentially increasing
@@ -135,7 +135,7 @@ class NFA(object):
                 lo = 0
                 break
             lo_seq = "".join(num_to_seq(lo, self.alphabet, max_len))
-            lo_num_accepted = self.num_accepts(max_len, lo_seq)
+            lo_num_accepted = self.num_accepts_ge(max_len, lo_seq)
             if lo_num_accepted > desired_num_accepted:
                 break
             diff *= 2
@@ -143,7 +143,7 @@ class NFA(object):
         while lo <= hi:
             mid = (lo + hi) // 2
             mid_seq = "".join(num_to_seq(mid, self.alphabet, max_len))
-            mid_num_accepted = self.num_accepts(max_len, mid_seq)
+            mid_num_accepted = self.num_accepts_ge(max_len, mid_seq)
             if mid_num_accepted < desired_num_accepted:
                 hi = mid - 1
             elif mid_num_accepted == desired_num_accepted and self.accepts(mid_seq):
@@ -155,7 +155,7 @@ class NFA(object):
     def next_accepted(self, sequence: Sequence[Text], max_len: int) -> Optional[Text]:
         """Returns the smallest string up to max_len characters accepted by this NFA greater than sequence."""
         max_hi = num_seqs_with_max_len(len(self.alphabet), max_len)
-        desired_num_accepted = self.num_accepts(max_len, sequence) - self.accepts(sequence)
+        desired_num_accepted = self.num_accepts_ge(max_len, sequence) - self.accepts(sequence)
         lo = seq_to_num(sequence, self.inverse_alphabet, max_len) + 1
 
         # We don't have an upper bound on where the next_accepted string is, so we look at an exponentially increasing
@@ -167,7 +167,7 @@ class NFA(object):
                 hi = max_hi - 1
                 break
             hi_seq = "".join(num_to_seq(hi, self.alphabet, max_len))
-            hi_num_accepted = self.num_accepts(max_len, hi_seq)
+            hi_num_accepted = self.num_accepts_ge(max_len, hi_seq)
             if hi_num_accepted < desired_num_accepted:
                 break
             lo = hi
@@ -177,7 +177,7 @@ class NFA(object):
         while lo <= hi:
             mid = (lo + hi) // 2
             mid_seq = "".join(num_to_seq(mid, self.alphabet, max_len))
-            mid_num_accepted = self.num_accepts(max_len, mid_seq)
+            mid_num_accepted = self.num_accepts_ge(max_len, mid_seq)
             if mid_num_accepted < desired_num_accepted:
                 hi = mid - 1
             elif mid_num_accepted == desired_num_accepted and self.accepts(mid_seq):
@@ -189,7 +189,7 @@ class NFA(object):
     def _sum_tables(self, table: Dict[FrozenSet[int], int]) -> int:
         return sum(count for nodes, count in table.items() if any(node in self.accept_nodes for node in nodes))
 
-    def num_accepts(self, max_len: int, bound: Sequence[Text] = ()) -> int:
+    def num_accepts(self, max_len: int, bound: Sequence[Text] = ()) -> Tuple[int, int, int]:
         """Returns the number of sequences accepted by this NFA.
 
         Return the number of sequences with length less than or equal to max_len
@@ -200,19 +200,24 @@ class NFA(object):
           bound: sequence below which, no sequences are considered
 
         Returns:
-          int: number of sequences accepted considering max_len and bound
+          int: number of sequences accepted that are < bound and have len() <= max_len
+          int: number of sequences accepted that are = bound and have len() <= max_len
+          int: number of sequences accepted that are > bound and have len() <= max_len
         """
+        lt1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
+        lt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         eq1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         eq2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         gt1: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         gt2: Dict[FrozenSet[int], int] = collections.defaultdict(int)
         eq1[frozenset(self.start_nodes)] = 1
-        result = 0
+        num_accepted_le = int(self.accepts(""))
+        num_accepted_gt = 0
         for c in itertools.islice(itertools.chain(bound, itertools.repeat(None)), 0, max_len):
-            for nodes, count in gt1.items():
+            for nodes, count in lt1.items():
                 for element in self.possible_transitions(nodes):
                     next_nodes = frozenset(self.next_nodes(nodes, element))
-                    gt2[next_nodes] += count
+                    lt2[next_nodes] += count
             for nodes, count in eq1.items():
                 for element in self.possible_transitions(nodes):
                     next_nodes = frozenset(self.next_nodes(nodes, element))
@@ -220,12 +225,27 @@ class NFA(object):
                         gt2[next_nodes] += count
                     elif element == c:
                         eq2[next_nodes] += count
-            result += self._sum_tables(gt2)
-            if not gt2 and not eq2:
+                    else:
+                        lt2[next_nodes] += count
+            for nodes, count in gt1.items():
+                for element in self.possible_transitions(nodes):
+                    next_nodes = frozenset(self.next_nodes(nodes, element))
+                    gt2[next_nodes] += count
+            num_accepted_le += self._sum_tables(eq2)
+            num_accepted_le += self._sum_tables(lt2)
+            num_accepted_gt += self._sum_tables(gt2)
+            if not lt2 and not eq2 and not gt2:
                 break  # Exit early if we know this regex cannot accept anymore strings.
+            lt1, lt2 = lt2, collections.defaultdict(int)
             eq1, eq2 = eq2, collections.defaultdict(int)
             gt1, gt2 = gt2, collections.defaultdict(int)
-        return result + (len(bound) <= max_len and self.accepts(bound))
+        num_accepted_eq = int(len(bound) <= max_len and self.accepts(bound))
+        return num_accepted_le - num_accepted_eq, num_accepted_eq, num_accepted_gt
+
+    def num_accepts_ge(self, max_len: int, bound: Sequence[Text] = ()) -> int:
+        """Returns the number of sequences >= bound with len() <= max_len accepted by this NFA."""
+        _, num_accepted_eq, num_accepted_gt = self.num_accepts(max_len, bound)
+        return num_accepted_eq + num_accepted_gt
 
     def ensure_disjoint(self, other_nfa: "NFA") -> None:
         offset = len(other_nfa.nodes)
@@ -453,8 +473,8 @@ def find_partition_seq(
     max_letter = max(nfa.alphabet)
     lo: int = seq_to_num(low, nfa.inverse_alphabet, max_len)
     hi: int = seq_to_num((max_letter for _ in range(max_len)) if high is None else high, nfa.inverse_alphabet, max_len)
-    lo_num_accepts = nfa.num_accepts(max_len, tuple(num_to_seq(lo, nfa.alphabet, max_len)))
-    hi_num_accepts = nfa.num_accepts(max_len, tuple(num_to_seq(hi, nfa.alphabet, max_len)))
+    lo_num_accepts = nfa.num_accepts_ge(max_len, tuple(num_to_seq(lo, nfa.alphabet, max_len)))
+    hi_num_accepts = nfa.num_accepts_ge(max_len, tuple(num_to_seq(hi, nfa.alphabet, max_len)))
     total = lo_num_accepts - hi_num_accepts
     assert total >= 0
     target = lo_num_accepts - int(total * target_ratio)
@@ -467,7 +487,7 @@ def find_partition_seq(
         else:
             mid = (lo + hi) // 2
         mid_str = tuple(num_to_seq(mid, nfa.alphabet, max_len))
-        mid_num_accepts = nfa.num_accepts(max_len, mid_str)
+        mid_num_accepts = nfa.num_accepts_ge(max_len, mid_str)
         if lo >= hi or mid_num_accepts == target or abs(lo_num_accepts - hi_num_accepts) <= tolerance:
             break
         elif mid_num_accepts < target:
@@ -593,12 +613,12 @@ def main(argv: List[Text]) -> None:
 
     nfa = regex_str_to_re(regex_str).as_nfa()
 
-    total_num_accepts = nfa.num_accepts(max_len)
+    total_num_accepts = nfa.num_accepts_ge(max_len)
     print(f"The regular expression {regex_str!r} accepts {total_num_accepts} strings with length <= {max_len}.")
     if lo or hi:
         print(
             f"Between {lo!r} and {hi!r}, {regex_str!r} accepts "
-            f"{nfa.num_accepts(max_len, lo) - nfa.num_accepts(max_len, hi)} with len <= {max_len}."
+            f"{nfa.num_accepts_ge(max_len, lo) - nfa.num_accepts_ge(max_len, hi)} with len <= {max_len}."
         )
     print()
     print(f"These strings can be evenly split, within a {100 * tolerance_ratio:f}% tolerance by the strings:")
@@ -606,7 +626,7 @@ def main(argv: List[Text]) -> None:
         # For even nicer output, we use nfa.prev_accepted(...) to get a partition that the regex accepts.
         seq = "".join(raw_seq)
         accepted_seq = "".join(raw_seq if nfa.accepts(raw_seq) else nfa.next_accepted(raw_seq, max_len) or raw_seq)
-        num_accepts = nfa.num_accepts(max_len, seq)
+        num_accepts = nfa.num_accepts_ge(max_len, seq)
         print(
             f"  {regex_str!r} accepts {num_accepts} ({100 * num_accepts / total_num_accepts}%) "
             f"of strings after {accepted_seq!r} (or {seq!r})."

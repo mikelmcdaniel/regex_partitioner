@@ -58,8 +58,9 @@ class Test(unittest.TestCase):
             self.assertFalse(nfa.accepts(str(n + 1)))
             self.assertFalse(nfa.accepts(str(n + 2)))
 
-        self.assertEqual(nfa.num_accepts(1), 5)  # "", "0", "3", "6", "9
-        self.assertEqual(nfa.num_accepts(1, "555"), 2)  # "6", "9"
+        self.assertEqual((0, 1, 4), nfa.num_accepts(1))  # "", "0", "3", "6", "9
+        self.assertEqual((3, 0, 2), nfa.num_accepts(1, "555"))  # "6", "9"
+        self.assertEqual((2, 1, 2), nfa.num_accepts(1, "3"))  # "6", "9"
 
         max_len = 3
         all_strs = set()
@@ -67,7 +68,10 @@ class Test(unittest.TestCase):
             all_strs.update("".join(s) for s in itertools.product("0123456789", repeat=str_len))
         div_by_3_strs = {s for s in all_strs if s == "" or int(s) % 3 == 0}
         for bound in sorted(all_strs):
-            expected_num_accepts = sum(s >= bound for s in div_by_3_strs)
+            num_accepts_lt = sum(s < bound for s in div_by_3_strs)
+            num_accepts_eq = sum(s == bound for s in div_by_3_strs)
+            num_accepts_gt = sum(s > bound for s in div_by_3_strs)
+            expected_num_accepts = (num_accepts_lt, num_accepts_eq, num_accepts_gt)
             self.assertEqual(expected_num_accepts, nfa.num_accepts(max_len, bound), f"{bound=}")
 
         self.assertEqual(None, nfa.prev_accepted("", 3))
@@ -99,7 +103,7 @@ class Test(unittest.TestCase):
 
     def test_nfa_num_accepts_early_exit(self):
         nfa = regex_partitioner.regex_str_to_re("apple|banana|coconut").as_nfa()
-        self.assertEqual(3, nfa.num_accepts(max_len=2 ** 31))
+        self.assertEqual((0, 0, 3), nfa.num_accepts(max_len=2 ** 31))
 
     def test_regex_str_to_re(self):
         nfa = regex_partitioner.regex_str_to_re("(apple)*|foo[0-9]{2,4}").as_nfa()
@@ -135,7 +139,7 @@ class Test(unittest.TestCase):
 
     def test_find_partition_seq(self):
         nfa = regex_partitioner.regex_str_to_re("[0-9]{4}").as_nfa()
-        self.assertEqual(10000, nfa.num_accepts(99))
+        self.assertEqual((0, 0, 10000), nfa.num_accepts(99))
         self.assertTrue(nfa.accepts("0000"))
         self.assertTrue(nfa.accepts("1234"))
         self.assertTrue(nfa.accepts("9876"))
@@ -145,7 +149,7 @@ class Test(unittest.TestCase):
         self.assertFalse(nfa.accepts("12345"))
         self.assertFalse(nfa.accepts("-1"))
         self.assertFalse(nfa.accepts("1.2"))
-        self.assertEqual(10000, nfa.num_accepts(4))
+        self.assertEqual((0, 0, 10000), nfa.num_accepts(4))
         # Note: These exact values aren't important. A small change in find_partition_seq can lead to slightly different
         # but equally valid results! For example, the "4001" test case could return "4", "40", "400", or "4000"
         self.assertEqual("", "".join(regex_partitioner.find_partition_seq(nfa, max_len=4, target_ratio=0)))
