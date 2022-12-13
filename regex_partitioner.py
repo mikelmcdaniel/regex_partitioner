@@ -550,15 +550,14 @@ ALPHABET: FrozenSet[Text] = frozenset(string.printable)
 def sre_to_re(sre, alphabet: FrozenSet[Text] = ALPHABET) -> RE:
     if isinstance(sre, tuple):
         op, args = sre
-        op = str(op).lower()
-        if op == "branch":  # or
+        if op == sre_parse.BRANCH:  # or
             none, sres = args
             assert none is None  # I don't know how to interpret a non-None value.
             return REOr(map(sre_to_re, sres))
-        elif op == "in":  # or
+        elif op == sre_parse.IN:  # or
             sres = args
             return REOr(map(sre_to_re, sres))
-        elif op == "category":  # or (\d, \W)
+        elif op == sre_parse.CATEGORY:  # or (\d, \W)
             if args == sre_parse.CATEGORY_DIGIT:
                 return REOr([RESequence(c) for c in string.digits if c in alphabet])
             elif args == sre_parse.CATEGORY_NOT_DIGIT:
@@ -573,13 +572,13 @@ def sre_to_re(sre, alphabet: FrozenSet[Text] = ALPHABET) -> RE:
                 return REOr([RESequence(d) for d in alphabet if d not in string.whitespace])
             else:
                 raise Exception(f'Unknown category type "{args!r}".')
-        elif op == "assert":  # (?=REGEX)
+        elif op == sre_parse.ASSERT:  # (?=REGEX)
             _, sres = args
             assert len(sres) == 2
             return sre_to_re(sres[1])
-        elif op == "any":  # .
+        elif op == sre_parse.ANY:  # .
             return REOr([RESequence(c) for c in alphabet])
-        elif op == "max_repeat" or op == "min_repeat":  # {m,n}, *, +
+        elif op == sre_parse.MAX_REPEAT or op == sre_parse.MIN_REPEAT:  # {m,n}, *, +
             min_repeat, max_repeat, sre = args
             res: List[RE] = []
             main_res = sre_to_re(sre)
@@ -597,18 +596,18 @@ def sre_to_re(sre, alphabet: FrozenSet[Text] = ALPHABET) -> RE:
             else:
                 return res[0]
             return RERepeat(res)
-        elif op == "literal":  # A single character.
+        elif op == sre_parse.LITERAL:  # A single character.
             return RESequence(chr(args))
-        elif op == "not_literal":  # Any character,  except this single character.
+        elif op == sre_parse.NOT_LITERAL:  # Any character,  except this single character.
             literal = chr(args)
             return REOr([RESequence(c) for c in alphabet if c != literal])
-        elif op == "subpattern":
+        elif op == sre_parse.SUBPATTERN:
             _, _, _, sres = args
             return sre_to_re(sres)
-        elif op == "range":
+        elif op == sre_parse.RANGE:
             min_literal, max_literal = args
             return REOr([RESequence(chr(c)) for c in range(min_literal, max_literal + 1)])
-        elif op == "at":  # Anchor characters (e.g. "^" and "$")
+        elif op == sre_parse.AT:  # Anchor characters (e.g. "^" and "$")
             return RESequence("")
         else:
             raise Exception(f"Unknown op, args pair: {op!r}, {args!r}")
