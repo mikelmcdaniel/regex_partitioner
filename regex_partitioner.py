@@ -505,7 +505,10 @@ def find_partition_seq(
     total = lo_num_accepts - hi_num_accepts
     assert total >= 0
     target = lo_num_accepts - int(total * target_ratio)
-    tolerance = int(total * tolerance_ratio)
+    try:
+        tolerance = int(total * tolerance_ratio)
+    except OverflowError:
+        tolerance = int(total * fractions.Fraction(tolerance_ratio))
     for j in itertools.cycle((0, 1)):
         if j == 0 and hi_num_accepts != lo_num_accepts:
             mid: int = lo + (hi - lo) * (lo_num_accepts - target) // (lo_num_accepts - hi_num_accepts)
