@@ -401,13 +401,24 @@ class REOr(RE):
 
     def as_nfa(self) -> NFA:
         assert self.sub_trees
-        nfa = self.sub_trees[0].as_nfa()
-        for sub_tree in itertools.islice(self.sub_trees, 1, len(self.sub_trees)):
-            sub_nfa = sub_tree.as_nfa()
-            sub_nfa.ensure_disjoint(nfa)
-            nfa.update_nodes(sub_nfa)
-            nfa.start_nodes.update(sub_nfa.start_nodes)
-            nfa.accept_nodes.update(sub_nfa.accept_nodes)
+        nfa = NFA()
+        has_single_char_sequences = False
+        for sub_tree in self.sub_trees:
+            # Generate a more compact NFA in the common case that this is an expression like "a|b|c|d|...|z"
+            if isinstance(sub_tree, RESequence) and len(sub_tree.sequence) == 1:
+                if not has_single_char_sequences:
+                    has_single_char_sequences = True
+                    start_node = nfa.add_node()
+                    nfa.start_nodes.add(start_node)
+                    accept_node = nfa.add_node()
+                    nfa.accept_nodes.add(accept_node)
+                nfa.add_transition(start_node, accept_node, sub_tree.sequence)
+            else:
+                sub_nfa = sub_tree.as_nfa()
+                sub_nfa.ensure_disjoint(nfa)
+                nfa.update_nodes(sub_nfa)
+                nfa.start_nodes.update(sub_nfa.start_nodes)
+                nfa.accept_nodes.update(sub_nfa.accept_nodes)
         return nfa
 
 
