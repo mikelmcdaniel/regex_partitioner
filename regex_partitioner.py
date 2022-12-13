@@ -370,11 +370,17 @@ class REConcat(RE):
                 sub_nfa = sub_tree.as_nfa()
                 sub_nfa.ensure_disjoint(nfa)
                 nfa.update_nodes(sub_nfa)
-                connecting_node = nfa.add_node()
-                for node in nfa.accept_nodes:
-                    nfa.add_transition(node, connecting_node, None)
-                for node in sub_nfa.start_nodes:
-                    nfa.add_transition(connecting_node, node, None)
+                if len(nfa.accept_nodes) == 1 or len(sub_nfa.start_nodes) == 1:
+                    # Generate a more compact NFA in the common case that we do not need to connect many nodes
+                    for prev_node in nfa.accept_nodes:
+                        for next_node in sub_nfa.start_nodes:
+                            nfa.add_transition(prev_node, next_node, None)
+                else:
+                    connecting_node = nfa.add_node()
+                    for node in nfa.accept_nodes:
+                        nfa.add_transition(node, connecting_node, None)
+                    for node in sub_nfa.start_nodes:
+                        nfa.add_transition(connecting_node, node, None)
                 nfa.accept_nodes = sub_nfa.accept_nodes
             return nfa
 
