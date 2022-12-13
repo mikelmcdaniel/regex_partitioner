@@ -334,7 +334,12 @@ class REConcat(RE):
     """Class representing concatenated regular expressions (e.g. "abc")."""
 
     def __init__(self, sub_trees: Iterable[RE]):
-        self.sub_trees = list(sub_trees)
+        self.sub_trees: List[RE] = []
+        for sub_tree in sub_trees:
+            if isinstance(sub_tree, REConcat):
+                self.sub_trees.extend(sub_tree.sub_trees)
+            else:
+                self.sub_trees.append(sub_tree)
 
     def match(self, sequence: Text) -> Optional[int]:
         sub_trees = iter(self.sub_trees)
@@ -389,7 +394,12 @@ class REOr(RE):
     """Class representing a union regular expression (e.g. "a|b")."""
 
     def __init__(self, sub_trees: Iterable[RE]):
-        self.sub_trees = list(sub_trees)
+        self.sub_trees: List[RE] = []
+        for sub_tree in sub_trees:
+            if isinstance(sub_tree, REOr):
+                self.sub_trees.extend(sub_tree.sub_trees)
+            else:
+                self.sub_trees.append(sub_tree)
 
     def match(self, sequence: Text) -> Optional[int]:
         m = None
